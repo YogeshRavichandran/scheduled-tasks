@@ -1,39 +1,45 @@
-# To run and test the code you need to update 4 places:
-# 1. Change MY_EMAIL/MY_PASSWORD to your own details.
-# 2. Go to your email provider and make it allow less secure apps.
-# 3. Update the SMTP ADDRESS to match your email provider.
-# 4. Update birthdays.csv to contain today's month and day.
-# See the solution video in the 100 Days of Python Course for explainations.
-
-
-from datetime import datetime
-import pandas
-import random
-import smtplib
+import requests
 import os
+import twilio
+from twilio.rest import Client
+api_key = os.environ.get("OWM_API_KEY")
+CHENNAI_LAT = 13.082680
+CHENNAI_LONG = 80.270721
+parameters = {
+    "lat":CHENNAI_LAT,
+    "lon":CHENNAI_LONG,
+    "appid":api_key,
+    "cnt": 4
+}
 
-# import os and use it to get the Github repository secrets
-MY_EMAIL = os.environ.get("MY_EMAIL")
-MY_PASSWORD = os.environ.get("MY_PASSWORD")
+account_sid = os.environ.get("ACCOUNT_SID")
+auth_token = os.environ.get("AUTH_TOKEN")
 
-today = datetime.now()
-today_tuple = (today.day, today.month)
+response = requests.get("https://api.openweathermap.org/data/2.5/forecast", params=parameters)
+response.raise_for_status()
+weather_data = response.json()
+# all_weather_id = []
+# for intervals in range(0, 3):
+#     weather_id = int(data["list"][intervals]["weather"][0]["id"])
+#     all_weather_id.append(weather_id)
+# print(all_weather_id)
+#
+# for weather in all_weather_id:
+#     if weather < 700:
+#         print("Bring an umbrella")
 
-df = pandas.read_csv("./birthdays.csv")
+will_rain = False
+for hour_data in weather_data["list"]:
+    condition_code = hour_data["weather"][0]["id"]
+    if int(condition_code) < 700:
+        will_rain = True
+if will_rain:
+    client = Client(account_sid, auth_token)
 
-data_dict = {(row.day, row.month): row for (index, row) in df.iterrows()}
+    message = client.messages.create(
+        body="It's gonna rain. Remember to bring your ☔️",
+        from_="+19313913995",
+        to="+918667865824",
+    )
 
-if today_tuple in data_dict:
-    birthday_person = data_dict[today_tuple]
-    file_path = f"./letter_templates/letter_{random.randint(1,3)}.txt"
-    with open(file_path, "r") as letter_file:
-        contents = letter_file.read()
-        contents = contents.replace("[NAME]", birthday_person["name"])
-
-    with smtplib.SMTP("smtp.gmail.com", port=587) as connection:
-        connection.starttls()
-        connection.login(user=MY_EMAIL, password=MY_PASSWORD)
-        connection.sendmail(
-            from_addr=MY_EMAIL,
-            to_addrs=birthday_person["email"],
-            msg=f"Subject: Happy Birthday\n\n{contents}")
+    print(message.status)
